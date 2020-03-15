@@ -6,11 +6,13 @@ use std::io::{Write, BufReader, BufRead};
 use std::sync::mpsc::{Receiver, TryIter};
 use bus::{Bus, BusReader};
 use std::time::Duration;
+use crate::signald::signaldresponse::SignaldResponse;
+use serde_json::Value;
 
 pub struct SignaldSocket {
     socket_path: String,
     socket: UnixStream,
-    bus: Arc<Mutex<Bus<String>>>,
+    bus: Arc<Mutex<Bus<SignaldResponse>>>,
 }
 impl SignaldSocket {
     pub fn connect(socket_path:String, bus_size: usize) -> SignaldSocket {
@@ -37,8 +39,9 @@ impl SignaldSocket {
             for line in reader.lines() {
                 match line {
                     Ok(l) => {
-                        //tx.send(l);
-                        bus_tx.lock().unwrap().broadcast(l);
+                        println!("{}", l.as_str());
+                        let res: SignaldResponse = serde_json::from_str(&l).unwrap();
+                        bus_tx.lock().unwrap().broadcast(res);
                     },
                     Err(_) => {
 
@@ -51,10 +54,15 @@ impl SignaldSocket {
         // When there are no messages on the bus the receivers would otherwise be stuck waiting
         // This is a hacky implementation and should be changed once recv_deadline can be implemented
         let bus_tx_seconds = bus.clone();
+        let update_response = SignaldResponse {
+            _type: "bus_update".to_string(),
+            _id: None,
+            _data: Value::Null
+        };
         thread::spawn(move || {
             loop {
                 thread::sleep(Duration::from_secs(1));
-                bus_tx_seconds.lock().unwrap().broadcast("update".to_string());
+                bus_tx_seconds.lock().unwrap().broadcast(update_response.clone());
             }
         });
 
@@ -76,7 +84,7 @@ impl SignaldSocket {
         }
     }
 
-    pub fn get_rx(&mut self) -> BusReader<String> {
+    pub fn get_rx(&mut self) -> BusReader<SignaldResponse> {
         self.bus.lock().unwrap().add_rx()
     }
 }
