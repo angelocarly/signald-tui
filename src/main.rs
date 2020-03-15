@@ -1,52 +1,64 @@
 use std::{thread, time};
 use crate::signald::signaldrequest::SignaldRequestBuilder;
-use common::SOCKET_PATH;
 use signald::signald::Signald;
 use tokio::prelude::*;
 use tokio::task;
+use std::time::Instant;
+use std::sync::{Arc, Mutex};
 
 pub mod common;
 pub mod signald;
+pub mod event;
 
-/**
- * Main is currently used for debugging purposes
- * Will be removed once I figure out how to create a proper Crate
- * The library itself only consists of the signal/ folder
- */
-#[tokio::main]
-async fn main() {
-    let mut signald = Signald::connect(SOCKET_PATH.to_string());
+use std::io;
+use termion::raw::IntoRawMode;
+use tui::Terminal;
+use tui::backend::TermionBackend;
+use tui::widgets::{Widget, Block, Borders};
+use tui::layout::{Layout, Constraint, Direction};
+use std::io::stdin;
+use termion::input::{TermRead};
+use termion::event::Key;
+use crate::event::event::{Events, Event};
+use std::error::Error;
 
-    let mut messagebuilder = SignaldRequestBuilder::new();
-    messagebuilder.set_type("send".to_string());
-    messagebuilder.set_username("+32472271852".to_string());
-    messagebuilder.set_recipient_number("+32472271852".to_string());
-    messagebuilder.set_message_body("Heeey jarne".to_string());
-    let req = messagebuilder.build();
+fn main() -> Result<(), Box<dyn Error>> {
 
-    signald.subscribe("+32472271852".to_string());
+    let stdout = io::stdout().into_raw_mode()?;
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+    terminal.clear();
 
-    // signald.subscribe("+32472271852".to_string());
-    //signald.send_request(&req);
-    
-    // signald.link();
-    // signald.version();
-    // signald.list_contacts("+32472271852".to_string());
-    // signald.list_contacts("+32472271852".to_string());
-
-    match signald.list_contacts("+32472271852".to_string()).await {
-        Ok(r) => {
-            println!("{:?}", r.as_str());
-        },
-        Err(e) => {
-            println!("Request timed out") ;
+    let events: Events = Events::new();
+    loop {
+        terminal.draw(|mut f| {
+            let size = f.size();
+            Block::default()
+                .title("YOOOOOO")
+                .borders(Borders::ALL)
+                .render(&mut f, size);
+        })?;
+        //println!("test");
+        match events.next()? {
+            Event::Input(input) => match input {
+                Key::Char('q') => {
+                    break;
+                }
+                Key::Left => {
+                    // app.items.unselect();
+                }
+                Key::Down => {
+                    // app.items.next();
+                }
+                Key::Up => {
+                    // app.items.previous();
+                }
+                _ => {}
+            },
+            Event::Tick => {
+            }
         }
     }
-    // let contacts: String = signald.list_contacts("+32472271852".to_string()).await;
-    // let contacts1 = signald.list_contacts("+32472271852".to_string()).await.unwrap();
-    // println!("Received 1: {}\n", contacts);
-    //println!("Received 2: {}", contacts1);
-//    signald.read_requests();
 
+    Ok(())
 }
-
