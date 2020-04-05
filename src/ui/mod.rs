@@ -1,0 +1,48 @@
+use tui::backend::Backend;
+use tui::Frame;
+use tui::layout::{Constraint, Direction, Layout};
+use tui::widgets::{Block, Borders, List, Paragraph, Text, Widget};
+
+use crate::app::{App, Point};
+
+pub fn draw_basic_view<B>(f: &mut Frame<B>, app: &mut App)
+    where B: Backend,
+{
+    let size = f.size();
+
+    let panels = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Max(20),
+            Constraint::Length(9)
+        ].as_ref()).split(size);
+
+    let sidebar = panels[0];
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(4)
+        ].as_ref())
+        .split(panels[1]);
+
+    List::new(app.contacts.iter().map(|i| Text::raw(i)))
+        .block(Block::default()
+            .borders(Borders::ALL)
+            .title("List")
+        )
+        .render(f, sidebar);
+
+    Paragraph::new([Text::raw(&app.input_string)].iter())
+        .block(Block::default()
+            .borders(Borders::ALL)
+        )
+        .render(f, chunks[1]);
+
+    app.draw_cursor = true;
+    app.cursor_pos = Point {
+        x: chunks[1].x + app.input_position as u16 + 1,
+        y: chunks[1].y + 1,
+    }
+}
