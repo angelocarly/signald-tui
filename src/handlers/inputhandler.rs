@@ -31,7 +31,7 @@ impl Handler for InputHandler {
             }
             Key::Backspace => {
                 if app.input_string.chars().count() > 0 {
-                    let last_c = app.input_string.remove(app.input_position - 1);
+                    let _last_c = app.input_string.remove(app.input_position - 1);
                     app.input_position -= 1;
                 }
             }

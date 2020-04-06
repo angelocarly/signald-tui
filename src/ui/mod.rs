@@ -3,7 +3,7 @@ use tui::Frame;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::widgets::{Block, Borders, List, Paragraph, Text, Widget};
 
-use crate::app::{App, Point};
+use crate::app::{App, Point, Conversation};
 
 pub fn draw_basic_view<B>(f: &mut Frame<B>, app: &mut App)
     where B: Backend,
@@ -27,6 +27,7 @@ pub fn draw_basic_view<B>(f: &mut Frame<B>, app: &mut App)
         ].as_ref())
         .split(panels[1]);
 
+    // Contacts
     List::new(app.contacts.iter().map(|i| Text::raw(i)))
         .block(Block::default()
             .borders(Borders::ALL)
@@ -34,6 +35,16 @@ pub fn draw_basic_view<B>(f: &mut Frame<B>, app: &mut App)
         )
         .render(f, sidebar);
 
+    // Chat
+    let mut conv: Conversation = app.get_current_conversation().clone();
+    List::new(conv.messages.iter_mut().map(|i| Text::raw(i.message.clone())))
+        .block(Block::default()
+            .borders(Borders::ALL)
+            .title("Chat")
+        )
+        .render(f, chunks[0]);
+
+    // Input
     Paragraph::new([Text::raw(&app.input_string)].iter())
         .block(Block::default()
             .borders(Borders::ALL)
