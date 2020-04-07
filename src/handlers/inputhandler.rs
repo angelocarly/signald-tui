@@ -1,7 +1,6 @@
-use termion::event::Key;
 
 use crate::app::App;
-use crate::handlers::Handler;
+use crate::{event::key::Key, handlers::Handler};
 
 pub struct InputHandler {
     data: String,

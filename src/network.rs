@@ -2,17 +2,17 @@ use std::sync::Arc;
 
 use futures::SinkExt;
 use signald_rust::signald::Signald;
-use signald_rust::signaldresponse::{SignaldResponse, ResponseType};
+use signald_rust::signaldresponse::{ResponseType, SignaldResponse};
 use tokio::sync::Mutex;
 
-use crate::app::{Message, App};
+use crate::app::{App, Message};
 use bus::BusReader;
 
 pub enum IoEvent {
     Subscribe,
     GetContactList,
     SendMessage(SendMessageData),
-    Tick
+    Tick,
 }
 
 pub struct SendMessageData {
@@ -20,15 +20,15 @@ pub struct SendMessageData {
     pub message: String,
 }
 
-pub struct Network<'a> {
+pub struct Network {
     username: String,
-    app: &'a Arc<Mutex<App>>,
+    app: Arc<Mutex<App>>,
     pub signald: Signald,
     bus_rx: BusReader<SignaldResponse>,
 }
 
-impl<'a> Network<'a> {
-    pub fn new(username: String, app: &'a Arc<Mutex<App>>) -> Self {
+impl Network {
+    pub fn new(username: String, app: Arc<Mutex<App>>) -> Self {
         let mut signald = Signald::connect();
         let bus_rx = signald.get_rx();
         Self {
@@ -46,10 +46,10 @@ impl<'a> Network<'a> {
             }
             IoEvent::Subscribe => {
                 self.subscribe().await;
-            },
+            }
             IoEvent::SendMessage(d) => {
                 self.send_message(d).await;
-            },
+            }
             IoEvent::Tick => {
                 self.handle_responses().await;
             }
@@ -68,29 +68,34 @@ impl<'a> Network<'a> {
                         if sync.sent.is_some() {
                             let sent = sync.sent.unwrap();
                             let mesg = sent.message.message;
-                            let mut mutapp = self.app.lock().await;
 
                             let tui_message = Message {
                                 message: mesg,
-                                sender: mutapp.username.clone(),
+                                sender: self.username.clone(),
                                 receiver: sent.destination.clone(),
                                 timestamp: sent.timestamp,
                             };
-                            mutapp.get_conversation(sent.destination).messages.push(tui_message);
+
+                            let mut mutapp = self.app.lock().await;
+                            mutapp
+                                .get_conversation(sent.destination)
+                                .messages
+                                .push(tui_message);
                         }
                     }
                     // Received data message
                     if message.data_message.is_some() {
                         let mesg = message.data_message.unwrap();
-                        let mut mutapp = self.app.lock().await;
 
                         let source = message.source.unwrap();
                         let tui_message = Message {
                             message: mesg.message,
                             sender: source.clone(),
-                            receiver: mutapp.username.clone(),
+                            receiver: self.username.clone(),
                             timestamp: mesg.timestamp,
                         };
+
+                        let mut mutapp = self.app.lock().await;
                         mutapp.get_conversation(source).messages.push(tui_message);
                     }
                 }
@@ -101,37 +106,42 @@ impl<'a> Network<'a> {
                 ResponseType::Subscribed => {}
                 ResponseType::Unsubscribed => {}
                 ResponseType::Unknown(_, _) => {}
-                _ => {},
+                _ => {}
             }
         }
     }
 
     async fn subscribe(&mut self) {
-        self.signald.subscribe(self.username.clone()).await.unwrap();
+        if let Ok(_) = self.signald.subscribe(self.username.clone()).await {
+            
+        }
     }
 
     async fn get_contact_list(&mut self) {
-
-        let res = self.signald.list_contacts(self.username.clone()).await.unwrap();
-        match res.data {
-            ResponseType::ContactList(a) => {
-                let mut app = self.app.lock().await;
-                app.contacts.flush();
-                for contact in a.unwrap().iter() {
-                    app.contacts.push(contact.name.clone());
+        if let Ok(res) = self.signald.list_contacts(self.username.clone()).await {
+            match res.data {
+                ResponseType::ContactList(a) => {
+                    let mut app = self.app.lock().await;
+                    app.contacts.clear();
+                    for contact in a.unwrap().iter() {
+                        if !contact.name.is_empty() {
+                            app.contacts.push(contact.name.clone());
+                        }
+                    }
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 
     async fn send_message(&mut self, data: SendMessageData) {
-       self.signald.send(
-           self.username.clone(), 
-           data.recipient.clone(), 
-           Some(data.message.clone())
-        ).await;
-
+        self.signald
+            .send(
+                self.username.clone(),
+                data.recipient.clone(),
+                Some(data.message.clone()),
+            )
+            .await;
 
         let mut app = self.app.lock().await;
         let mesg = Message {

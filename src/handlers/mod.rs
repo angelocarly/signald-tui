@@ -1,6 +1,5 @@
-use termion::event::Key;
 
-use crate::app::App;
+use crate::{event::key::Key, app::App};
 
 pub mod inputhandler;
 

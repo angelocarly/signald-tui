@@ -1,5 +1,5 @@
 [package]
-name = "signald-rust"
+name = "signald-tui"
 version = "0.1.0"
 authors = ["angelocarly <angelo.carly@protonmail.com>"]
 edition = "2018"
