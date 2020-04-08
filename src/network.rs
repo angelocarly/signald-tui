@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::app::{App, Message};
 use bus::BusReader;
+use std::time::{UNIX_EPOCH, SystemTime};
 
 pub enum IoEvent {
     Subscribe,
@@ -144,11 +145,13 @@ impl Network {
             .await;
 
         let mut app = self.app.lock().await;
+        let start = SystemTime::now();
+        let datetime = start.duration_since(UNIX_EPOCH).expect("Time looped over");
         let mesg = Message {
             message: data.message,
             receiver: data.recipient.clone(),
             sender: app.username.clone(),
-            timestamp: 0,
+            timestamp: datetime.as_millis() as i64,
         };
         app.get_conversation(data.recipient).messages.push(mesg);
     }

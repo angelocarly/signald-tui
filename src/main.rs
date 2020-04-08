@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::io;
 use std::io::{Write, stdout};
 use std::sync::Arc;
 use std::{time::Duration, sync::mpsc::{Sender, Receiver}};
@@ -31,10 +30,8 @@ pub mod ui;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let number = "+32472271852".to_string();
-    // let recip = "+32470592018".to_string();
-    // let recip = "+32487795024".to_string();
-    let recip = "+32472271852".to_string();
+    let number = "my_number".to_string();
+    let recip = "other_number".to_string();
 
     // Terminal setup
     enable_raw_mode()?;

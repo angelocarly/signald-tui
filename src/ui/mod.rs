@@ -3,7 +3,8 @@ use tui::Frame;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::widgets::{Block, Borders, List, Paragraph, Text, Widget};
 
-use crate::app::{App, Point, Conversation};
+use crate::app::{App, Conversation, Point};
+use chrono::{NaiveDateTime, Local, TimeZone};
 
 pub fn draw_basic_view<B>(f: &mut Frame<B>, app: &mut App)
     where B: Backend,
@@ -37,7 +38,14 @@ pub fn draw_basic_view<B>(f: &mut Frame<B>, app: &mut App)
 
     // Chat
     let mut conv: Conversation = app.get_current_conversation().clone();
-    List::new(conv.messages.iter_mut().map(|i| Text::raw(i.message.clone())))
+    List::new(conv.messages.iter_mut()
+        .map(|i| {
+            let date = Local.timestamp(i.timestamp / 1000, 0);
+            Text::raw(
+                format!("{}: {}", date, i.message.clone())
+            )
+        })
+    )
         .block(Block::default()
             .borders(Borders::ALL)
             .title("Chat")
