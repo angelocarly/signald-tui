@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 use tui::backend::CrosstermBackend;
 use tui::Terminal;
 
-use crate::app::App;
+use crate::app::{App, View};
 use crate::event::event::{Event, Events};
 use crate::handlers::Handler;
 use crate::handlers::inputhandler::InputHandler;
@@ -20,6 +20,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use crate::handlers::contacthandler::ContactHandler;
 
 pub mod common;
 pub mod network;
@@ -30,34 +31,30 @@ pub mod ui;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let number = "my_number".to_string();
-    let recip = "other_number".to_string();
 
     // Terminal setup
     enable_raw_mode()?;
     let mut stdout = stdout();
     execute!(stdout, EnterAlternateScreen)?;
-
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
     // Io setup
     let (tx, rx) = std::sync::mpsc::channel::<IoEvent>();
     let txclone = tx.clone();
-    let app = Arc::new(Mutex::new(App::new(tx, number.clone())));
+    let app = Arc::new(Mutex::new(App::new(tx)));
 
     // Network setup
     let appclone = Arc::clone(&app);
     std::thread::spawn(move || {
-    let network = Network::new(number.clone(), appclone);
+    let network = Network::new(appclone);
         handle_network_io(txclone, rx, network);
     });
 
     // Initial network setup
     {
         let mut mutapp = app.lock().await;
-        mutapp.get_conversation(recip.clone());
-        mutapp.selected_conversation = recip.clone();
+        mutapp.io_tx.send(IoEvent::LoadAccount)?;
         mutapp.io_tx.send(IoEvent::Subscribe)?;
         mutapp.io_tx.send(IoEvent::GetContactList)?;
     }
@@ -93,11 +90,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     terminal.show_cursor()?;
                     break;
                 }
-                Key::Char(_x) => {
-                    InputHandler::handle(input, &mut app);
-                }
                 _ => {
-                    InputHandler::handle(input, &mut app);
+                    match app.focused_view {
+                        View::Contacts => {
+                            ContactHandler::handle(input, &mut app);
+                        }
+                        View::Chat => {
+                            InputHandler::handle(input, &mut app);
+                        }
+                    }
                 }
             },
             Event::Tick => {},

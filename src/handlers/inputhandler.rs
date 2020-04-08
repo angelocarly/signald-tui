@@ -9,9 +9,8 @@ impl Handler for InputHandler {
     fn handle(key: Key, app: &mut App) {
         match key {
             Key::Left => {
-                app.input_position -= 1;
-                if app.input_position < 0 {
-                    app.input_position = 0;
+                if app.input_position > 1 {
+                    app.input_position -= 1;
                 }
             }
             Key::Right => {
@@ -38,12 +37,14 @@ impl Handler for InputHandler {
                 }
             }
             Key::Enter => {
-                app.io_tx.send(IoEvent::SendMessage(SendMessageData {
-                    recipient: app.selected_conversation.clone(),
-                    message: app.input_string.clone(),
-                })).unwrap();
-                app.input_string.clear();
-                app.input_position = 0;
+                if let Some(rec) = app.get_selected_contact().clone() {
+                    app.io_tx.send(IoEvent::SendMessage(SendMessageData {
+                        recipient: rec.number,
+                        message: app.input_string.clone(),
+                    })).unwrap();
+                    app.input_string.clear();
+                    app.input_position = 0;
+                }
             }
             Key::Char(x) => {
                 app.input_string.insert(app.input_position, x);

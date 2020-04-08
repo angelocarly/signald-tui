@@ -5,7 +5,7 @@ use signald_rust::signald::Signald;
 use signald_rust::signaldresponse::{Account, ResponseType, SignaldResponse};
 use tokio::sync::Mutex;
 
-use crate::app::{App, Message};
+use crate::app::{App, Message, Contact};
 use bus::BusReader;
 use std::time::{UNIX_EPOCH, SystemTime};
 
@@ -13,6 +13,7 @@ pub enum IoEvent {
     Subscribe,
     GetContactList,
     SendMessage(SendMessageData),
+    LoadAccount,
     Tick,
 }
 
@@ -29,11 +30,11 @@ pub struct Network {
 }
 
 impl Network {
-    pub fn new(username: String, app: Arc<Mutex<App>>) -> Self {
+    pub fn new(app: Arc<Mutex<App>>) -> Self {
         let mut signald = Signald::connect();
         let bus_rx = signald.get_rx();
         Self {
-            username,
+            username: "".to_string(),
             app,
             signald,
             bus_rx,
@@ -50,6 +51,9 @@ impl Network {
             }
             IoEvent::SendMessage(d) => {
                 self.send_message(d).await;
+            }
+            IoEvent::LoadAccount => {
+                self.load_accounts().await;
             }
             IoEvent::Tick => {
                 self.handle_responses().await;
@@ -78,10 +82,9 @@ impl Network {
                             };
 
                             let mut mutapp = self.app.lock().await;
-                            mutapp
-                                .get_conversation(sent.destination)
-                                .messages
-                                .push(tui_message);
+                            if let Some(conv) = mutapp.get_conversation(sent.destination) {
+                                conv.messages.push(tui_message);
+                            }
                         }
                     }
                     // Received data message
@@ -97,7 +100,9 @@ impl Network {
                         };
 
                         let mut mutapp = self.app.lock().await;
-                        mutapp.get_conversation(source).messages.push(tui_message);
+                        if let Some(conv) = mutapp.get_conversation(source) {
+                            conv.messages.push(tui_message);
+                        }
                     }
                 }
                 ResponseType::Version(_) => {}
@@ -120,15 +125,20 @@ impl Network {
         if let Ok(res) = self.signald.list_contacts(self.username.clone()).await {
             match res.data {
                 ResponseType::ContactList(a) => {
-                    let mut app = self.app.lock().await;
-                    app.contacts.clear();
-                    for contact in a.unwrap().iter() {
-                        if let Some(name) = contact.name.clone() {
-                            if !name.is_empty() {
-                                app.contacts.push(name.to_string());
-                            }
-                        }
+                    let mut contacts: Vec<Contact> = Vec::new();
+
+                    for account in a.unwrap().iter() {
+
+                        let contact = Contact {
+                            name: account.name.clone(),
+                            number: account.number.clone(),
+                            color: account.color.clone(),
+                        };
+
+                        contacts.push(contact);
                     }
+                    let mut app = self.app.lock().await;
+                    app.update_contacts(contacts);
                 }
                 _ => {}
             }
@@ -153,6 +163,31 @@ impl Network {
             sender: app.username.clone(),
             timestamp: datetime.as_millis() as i64,
         };
-        app.get_conversation(data.recipient).messages.push(mesg);
+        if let Some(conv) = app.get_conversation(data.recipient) {
+            conv.messages.push(mesg);
+        }
+    }
+
+    async fn load_accounts(&mut self) {
+
+        if let Ok(res) = self.signald.list_accounts().await {
+
+            match res.data {
+                ResponseType::AccountList(a) => {
+                    let accounts = a.unwrap().accounts;
+
+                    if accounts.len() == 0 {
+                        panic!("No signald account found! exiting");
+                    }
+                    let username = accounts.get(0).unwrap().username.clone();
+                    self.username = username.clone();
+
+                    let mut app = self.app.lock().await;
+                    app.username = username;
+                    app.loaded = true;
+                }
+                _ => {}
+            }
+        }
     }
 }

@@ -5,6 +5,7 @@ use tui::widgets::{Block, Borders, List, Paragraph, Text, Widget};
 
 use crate::app::{App, Conversation, Point};
 use chrono::{NaiveDateTime, Local, TimeZone};
+use tui::style::{Style, Color};
 
 pub fn draw_basic_view<B>(f: &mut Frame<B>, app: &mut App)
     where B: Backend,
@@ -29,28 +30,48 @@ pub fn draw_basic_view<B>(f: &mut Frame<B>, app: &mut App)
         .split(panels[1]);
 
     // Contacts
-    List::new(app.contacts.iter().map(|i| Text::raw(i)))
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .title("List")
-        )
-        .render(f, sidebar);
-
-    // Chat
-    let mut conv: Conversation = app.get_current_conversation().clone();
-    List::new(conv.messages.iter_mut()
-        .map(|i| {
-            let date = Local.timestamp(i.timestamp / 1000, 0);
-            Text::raw(
-                format!("{}: {}", date, i.message.clone())
+    if let Some(contact) = app.get_selected_contact() {
+        List::new(app.contacts.iter().map(|i| {
+            if i.number.clone() == contact.number.clone() {
+                return Text::styled(i.name.clone().unwrap(), Style::default().fg(Color::Blue));
+            }
+            return Text::styled(i.name.clone().unwrap(), Style::default());
+        }))
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .title("List")
             )
-        })
-    )
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .title("Chat")
+            .render(f, sidebar);
+    } else {
+        Paragraph::new([Text::raw("No conversation selected")].iter())
+            .block(Block::default()
+                .borders(Borders::ALL)
+            )
+            .render(f, sidebar);
+    }
+
+// Chat
+    if let Some(conv) = app.get_current_conversation() {
+        List::new(conv.messages.iter_mut()
+            .map(|i| {
+                let date = Local.timestamp(i.timestamp / 1000, 0);
+                Text::raw(
+                    format!("{}: {}", date, i.message.clone())
+                )
+            })
         )
-        .render(f, chunks[0]);
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .title("Chat")
+            )
+            .render(f, chunks[0]);
+    } else {
+        Paragraph::new([Text::raw("No conversation selected")].iter())
+            .block(Block::default()
+                .borders(Borders::ALL)
+            )
+            .render(f, chunks[0]);
+    }
 
     // Input
     Paragraph::new([Text::raw(&app.input_string)].iter())
