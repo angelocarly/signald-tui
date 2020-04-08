@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures::SinkExt;
 use signald_rust::signald::Signald;
-use signald_rust::signaldresponse::{ResponseType, SignaldResponse};
+use signald_rust::signaldresponse::{Account, ResponseType, SignaldResponse};
 use tokio::sync::Mutex;
 
 use crate::app::{App, Message};
@@ -112,9 +112,7 @@ impl Network {
     }
 
     async fn subscribe(&mut self) {
-        if let Ok(_) = self.signald.subscribe(self.username.clone()).await {
-            
-        }
+        if let Ok(_) = self.signald.subscribe(self.username.clone()).await {}
     }
 
     async fn get_contact_list(&mut self) {
@@ -124,8 +122,10 @@ impl Network {
                     let mut app = self.app.lock().await;
                     app.contacts.clear();
                     for contact in a.unwrap().iter() {
-                        if !contact.name.is_empty() {
-                            app.contacts.push(contact.name.clone());
+                        if let Some(name) = contact.name.clone() {
+                            if !name.is_empty() {
+                                app.contacts.push(name.to_string());
+                            }
                         }
                     }
                 }

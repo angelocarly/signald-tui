@@ -1,11 +1,11 @@
 use std::error::Error;
 use std::io;
+use std::io::{Write, stdout};
 use std::sync::Arc;
 use std::{time::Duration, sync::mpsc::{Sender, Receiver}};
 
 use crossterm::cursor::MoveTo;
 use crossterm::ExecutableCommand;
-use termion::raw::IntoRawMode;
 use tokio::sync::Mutex;
 use tui::backend::CrosstermBackend;
 use tui::Terminal;
@@ -16,9 +16,11 @@ use crate::handlers::Handler;
 use crate::handlers::inputhandler::InputHandler;
 use crate::network::{IoEvent, Network};
 use crate::ui::draw_basic_view;
-use signald_rust::signaldresponse::SignaldResponse;
-use network::SendMessageData;
 use event::key::Key;
+use crossterm::{
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 
 pub mod common;
 pub mod network;
@@ -30,12 +32,17 @@ pub mod ui;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let number = "+32472271852".to_string();
+    // let recip = "+32470592018".to_string();
+    // let recip = "+32487795024".to_string();
+    let recip = "+32472271852".to_string();
 
     // Terminal setup
-    let stdout = io::stdout().into_raw_mode()?;
+    enable_raw_mode()?;
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    terminal.clear()?;
 
     // Io setup
     let (tx, rx) = std::sync::mpsc::channel::<IoEvent>();
@@ -43,18 +50,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let app = Arc::new(Mutex::new(App::new(tx, number.clone())));
 
     // Network setup
-    // let appclone = Arc::clone(&app);
-    // std::thread::spawn(move || {
-    // let network = Network::new(number.clone(), appclone);
-    //     handle_network_io(txclone, rx, network);
-    // });
+    let appclone = Arc::clone(&app);
+    std::thread::spawn(move || {
+    let network = Network::new(number.clone(), appclone);
+        handle_network_io(txclone, rx, network);
+    });
 
     // Initial network setup
     {
-        let mutapp = app.lock().await;
+        let mut mutapp = app.lock().await;
+        mutapp.get_conversation(recip.clone());
+        mutapp.selected_conversation = recip.clone();
         mutapp.io_tx.send(IoEvent::Subscribe)?;
-        // mutapp.io_tx.send(IoEvent::GetContactList)?;
+        mutapp.io_tx.send(IoEvent::GetContactList)?;
     }
+
+    terminal.clear()?;
 
     let events: Events = Events::new(250);
     loop {
@@ -80,16 +91,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         match events.next()? {
             Event::Input(input) => match input {
                 Key::Char('q') => {
+                    disable_raw_mode()?;
+                    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+                    terminal.show_cursor()?;
                     break;
-                }
-                Key::Char('\n') => {
-                    app.io_tx.send(IoEvent::SendMessage(SendMessageData {
-                        // recipient: "+32487795024".to_string(), //milad
-                        recipient: "+32472271852".to_string(),
-                        message: app.input_string.clone()
-                    }))?;
-                    app.input_string.clear();
-                    app.input_position = 0;
                 }
                 Key::Char(_x) => {
                     InputHandler::handle(input, &mut app);

@@ -16,4 +16,7 @@ futures = "0.3.4"
 tui = { version = "0.8.0", features = ["crossterm"], default-features = false }
 rand = "0.7.3"
 termion = "*"
-signald-rust = "0.1.4"
+# signald-rust = "0.1.5"
+signald-rust = { path = "../signald-rust" }
+
+[dev-dependencies]
